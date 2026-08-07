@@ -1,54 +1,93 @@
-import re
-import bs4
+import hashlib
+import json
+import time
+import random
 import requests
 
-import constant
 from logger import logger
+
+# 签名密钥（移动端 API）
+SIGN_KEY = "tiebaclient!!!"
+
+
+def _encode_data(data: dict) -> dict:
+    """为移动端 API 生成签名"""
+    s = ""
+    for key in sorted(data.keys()):
+        s += f"{key}={data[key]}"
+    sign = hashlib.md5((s + SIGN_KEY).encode("utf-8")).hexdigest().upper()
+    data["sign"] = sign
+    return data
 
 
 def get_favorite(cookie):
-    # 将关注的吧存入列表并返回
+    """通过移动端 API 获取关注贴吧列表"""
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Linux; Android 10; MI 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Mobile Safari/537.36",
+        "Accept": "application/json",
+        "Accept-Language": "zh-CN,zh;q=0.9",
+        "Referer": "https://tieba.baidu.com/",
+        "Content-Type": "application/x-www-form-urlencoded",
+    }
+
+    like_url = "https://c.tieba.baidu.com/c/f/forum/like"
     favorites = []
-    # 获取页数
-    pn_max = get_favorite_page_num(cookie)
-    if pn_max == 0:
-        logger.info("未获取贴吧信息")
-        return favorites
-    for i in range(1, pn_max + 1):
-        # attention_url算是一个接口，在i贴吧查看关注的吧时可以看到
-        req = requests.get(f"{constant.attention_url}?&pn={i}", headers=constant.headers_sign, cookies=cookie)
-        # 调用bs4解析网页，需要预先安装lxml模块
-        html = bs4.BeautifulSoup(req.text, 'lxml')
-        # 从页面中检索关注的贴吧
-        tieba_list = html.find('div', class_="forum_table").find_all("tr")[1:]
-        # 将关注的贴吧直接添加到favorite中
-        favorite_page = []
-        for tieba in tieba_list:
-            favorite_page.append(tieba.find('a', class_=None).get('title'))
-        logger.info(f"在第{str(i)}页，获取到这些贴吧{favorite_page}")
-        favorites.extend(favorite_page)
+    page_no = 1
+
+    while True:
+        data = {
+            "BDUSS": cookie.get("BDUSS", ""),
+            "_client_type": "2",
+            "_client_id": "wappc_" + str(int(time.time() * 1000)) + "_" + str(random.randint(100, 999)),
+            "_client_version": "9.7.8.0",
+            "_phone_imei": "000000000000000",
+            "from": "1008621y",
+            "page_no": str(page_no),
+            "page_size": "200",
+            "model": "MI+9",
+            "net_type": "1",
+            "timestamp": str(int(time.time())),
+            "vcode_tag": "11",
+        }
+        data = _encode_data(data)
+
+        try:
+            time.sleep(random.uniform(0.5, 1.5))
+            resp = requests.post(like_url, headers=headers, cookies=cookie, data=data, timeout=15)
+            res = resp.json()
+
+            if "forum_list" not in res:
+                logger.warning(f"第{page_no}页无贴吧数据: {res}")
+                break
+
+            forum_list = res["forum_list"]
+            page_forums = []
+
+            # 非名人堂和名人堂贴吧
+            for forum_type in ["non-gconforum", "gconforum"]:
+                if forum_type in forum_list:
+                    items = forum_list[forum_type]
+                    if isinstance(items, list):
+                        for item in items:
+                            name = item.get("name", "")
+                            if name:
+                                page_forums.append(name)
+                                favorites.append(name)
+                    elif isinstance(items, dict):
+                        name = items.get("name", "")
+                        if name:
+                            page_forums.append(name)
+                            favorites.append(name)
+
+            logger.info(f"第{page_no}页获取到: {page_forums}")
+
+            if res.get("has_more") != "1":
+                break
+
+            page_no += 1
+        except Exception as e:
+            logger.error(f"获取关注列表第{page_no}页失败: {e}")
+            break
+
+    logger.info(f"共获取到 {len(favorites)} 个关注的贴吧")
     return favorites
-
-
-# 获取关注贴吧页面页数
-def get_favorite_page_num(cookie):
-    # attention_url算是一个接口，在i贴吧查看关注的吧时可以看到
-    req = requests.get(url=constant.attention_url, headers=constant.headers_sign, cookies=cookie)
-    # 调用bs4解析网页，需要预先安装lxml模块
-    html = bs4.BeautifulSoup(req.text, 'lxml')
-    # 返回导航链接
-    links = html.find_all('a', href=True)
-    # 提取pn后的数字
-    pn_nums = []
-    for link in links:
-        match = re.search(r'pn=(\d+)', link['href'])
-        if match:
-            pn_nums.append(int(match.group(1)))
-    # 获取最大的pn值，即尾页的数字
-    if pn_nums:
-        last_page = max(pn_nums)
-        logger.info(f'尾页的数字是: {str(last_page)}')
-        return last_page
-    else:
-        logger.info('未找到尾页信息')
-        return 0

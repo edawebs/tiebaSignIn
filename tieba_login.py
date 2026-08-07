@@ -1,100 +1,49 @@
 import os
+import json
 import time
 import random
 import requests
 
-import constant
 from logger import logger
 
 
 def login():
+    """验证 BDUSS 有效性并返回 Cookie"""
     bduss = os.getenv("BDUSS")
     ptoken = os.getenv("PTOKEN")
     if not bduss or not ptoken:
-        logger.info("缺少必要的环境变量")
+        logger.error("缺少必要的环境变量 BDUSS 或 PTOKEN")
         exit(1)
 
     login_cookie = {
-        "BDUSS": bduss,
-        "PTOKEN": ptoken,
+        "BDUSS": bduss.strip(),
+        "PTOKEN": ptoken.strip(),
     }
 
-    # 向贴吧首页发起GET请求
-    req = make_request(constant.index_url, login_cookie)
-    if req is None:
-        logger.error("登录失败：无法访问贴吧首页")
-        exit(1)
+    # 直接通过 TBS 接口验证登录状态（不依赖桌面版首页）
+    tbs_url = "https://tieba.baidu.com/dc/common/tbs"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "application/json, text/plain, */*",
+        "Accept-Language": "zh-CN,zh;q=0.9",
+        "Referer": "https://tieba.baidu.com/",
+    }
 
-    # 从反馈的信息中对Cookie进行补齐
-    for key in req.cookies.keys():
-        login_cookie[key] = req.cookies[key]
-
-    if req.status_code in (301, 302):
-        pass_url = req.headers['Location']
-        req_pass = make_request(pass_url, login_cookie)
-        if req_pass is None:
-            logger.error("登录失败：无法完成重定向")
-            exit(1)
-
-        stoken_url = req_pass.headers['Location']
-        req_stoken = make_request(stoken_url, login_cookie)
-        if req_stoken is None:
-            logger.error("登录失败：无法获取STOKEN")
-            exit(1)
-
+    for attempt in range(3):
         try:
-            login_cookie["STOKEN"] = req_stoken.cookies['STOKEN']
-            logger.info("登录成功")
-            return login_cookie
-        except KeyError as e:
-            logger.error(f"键值不存在: {e}")
+            time.sleep(random.uniform(0.5, 1.5))
+            resp = requests.get(tbs_url, headers=headers, cookies=login_cookie, timeout=15)
+            data = resp.json()
+            if data.get("is_login") == 1:
+                logger.info(f"登录验证成功，tbs={data.get('tbs')}")
+                return login_cookie
+            else:
+                logger.warning(f"第{attempt + 1}次验证: BDUSS 可能已过期，返回: {data}")
         except Exception as e:
-            logger.error(f"登录过程中出错: {e}")
-    else:
-        logger.error(f"错误码：{req.status_code}, 错误信息：{req.text}")
-        exit(1)
+            logger.warning(f"第{attempt + 1}次请求异常: {e}")
 
+        if attempt < 2:
+            time.sleep((attempt + 1) * 3)
 
-def get_random_user_agent():
-    user_agents = [
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0"
-    ]
-    return random.choice(user_agents)
-
-
-def get_headers():
-    return {
-        "User-Agent": get_random_user_agent(),
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-        "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
-        "Accept-Encoding": "gzip, deflate, br",
-        "Connection": "keep-alive",
-        "Upgrade-Insecure-Requests": "1"
-    }
-
-
-def make_request(url, cookies, max_retries=5):
-    for attempt in range(max_retries):
-        try:
-            # 随机延时0.5-2秒
-            time.sleep(random.uniform(0.5, 2))
-            headers = get_headers()
-            response = requests.get(
-                url=url,
-                headers=headers,
-                cookies=cookies,
-                allow_redirects=False,
-                timeout=10
-            )
-            if response.status_code != 403:
-                return response
-            logger.warning(f"第{attempt + 1}次请求返回403，正在重试...")
-        except requests.exceptions.RequestException as e:
-            logger.error(f"请求出错: {str(e)}")
-        # 重试前等待时间递增
-        if attempt < max_retries - 1:
-            time.sleep((attempt + 1) * 2)
-    return None
+    logger.error("登录验证失败：BDUSS 可能已过期，请重新获取")
+    exit(1)
