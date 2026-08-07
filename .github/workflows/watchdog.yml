@@ -1,0 +1,75 @@
+name: 看门狗 (12:00)
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 4 * * *'  # UTC 04:00 = 北京时间 12:00
+
+jobs:
+  watchdog:
+    runs-on: ubuntu-latest
+    env:
+      EMAIL_USER: ${{ secrets.EMAIL_USER }}
+      EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: 安装依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: 检查今日签到记录
+        id: check
+        run: |
+          python -c "
+          import json
+          import os
+          import sys
+          from datetime import datetime
+
+          today = datetime.now().strftime('%Y-%m-%d')
+          status_file = 'cache/signin-status.json'
+
+          if not os.path.exists(status_file):
+              print(f'ALERT: 状态文件不存在')
+              sys.exit(1)
+
+          with open(status_file, 'r', encoding='utf-8') as f:
+              s = json.load(f)
+
+          if s.get('date') != today:
+              print(f'ALERT: 今日无签到记录 (文件日期: {s.get(\"date\", \"未知\")})')
+              sys.exit(1)
+
+          total = s.get('success', 0) + s.get('signed', 0)
+          if total > 0:
+              print(f'OK: 今日已签到 {total} 个贴吧')
+              sys.exit(0)
+          else:
+              print(f'ALERT: 今日签到数为0')
+              sys.exit(1)
+          " 2>&1 | tee /tmp/watchdog.log
+          EXIT_CODE=${PIPESTATUS[0]}
+          echo "WATCHDOG_EXIT=$EXIT_CODE" >> $GITHUB_ENV
+          echo "WATCHDOG_LOG<<EOF" >> $GITHUB_ENV
+          cat /tmp/watchdog.log >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+      - name: 发送告警邮件
+        if: env.WATCHDOG_EXIT != '0'
+        run: |
+          python -c "
+          from notify import send_watchdog_alert
+          send_watchdog_alert()
+          "
+
+      - name: 正常（无需告警）
+        if: env.WATCHDOG_EXIT == '0'
+        run: echo "今日签到正常，看门狗无需介入"

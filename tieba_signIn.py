@@ -53,6 +53,7 @@ def sign(cookie, favorites):
     logger.info(f"{constant.GREEN}签到成功贴吧数量：{counts.get(success_flag)}{constant.RESET}, "
                 f"{constant.YELLOW}签到过贴吧数量：{counts.get(signed_flag)}{constant.RESET}, "
                 f"{constant.RED}签到失败贴吧数量：{counts.get(fail_flag)}{constant.RESET}")
+    return counts
 
 
 # 获取tbs
