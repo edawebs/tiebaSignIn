@@ -1,9 +1,9 @@
 {
   "date": "2026-08-07",
-  "time": "2026-08-07 10:40:00",
-  "workflow": "manual-test",
-  "total": 0,
+  "time": "2026-08-07 02:58:36",
+  "workflow": "sign-in",
+  "total": 131,
   "success": 0,
-  "signed": 0,
+  "signed": 131,
   "fail": 0
 }
