@@ -33,7 +33,8 @@ def write_status(counts, workflow_name, error=None):
 
 if __name__ == '__main__':
     workflow = os.getenv("WORKFLOW_NAME", "sign-in")
-    logger.info(f"===== 工作流: {workflow} =====")
+    backup_mode = "--backup" in sys.argv or os.getenv("BACKUP_MODE") == "1"
+    logger.info(f"===== 工作流: {workflow} {'(兜底模式)' if backup_mode else ''} =====")
 
     try:
         cookie = tieba_login.login()
@@ -43,7 +44,14 @@ if __name__ == '__main__':
         status = write_status(counts, workflow)
         logger.info(f"签到状态: {json.dumps(status, ensure_ascii=False)}")
 
-        notify.send_signin_report(counts)
+        if backup_mode:
+            # 兜底模式（14:00）：只有"有新的成功签到"(早上漏跑)或"有失败"才发邮件，全部已签则静默
+            if counts.get(success_flag, 0) > 0 or counts.get(fail_flag, 0) > 0:
+                notify.send_signin_report(counts)
+            else:
+                logger.info("兜底检查: 今天已全部签到，无需补签，不发送邮件")
+        else:
+            notify.send_signin_report(counts)
 
         if counts.get(fail_flag, 0) > 0:
             logger.warning(f"{counts[fail_flag]} 个贴吧签到失败，10:00 将自动补签")
