@@ -31,10 +31,30 @@ def write_status(counts, workflow_name, error=None):
     return status
 
 
+def already_signed_today():
+    """读取上次签到状态：今日已全部签到且无失败返回 True。
+    兜底模式用它短路，避免在无意义的复查中因网络抖动产生误报告警（2026-10-05）。"""
+    try:
+        with open("cache/signin-status.json", "r", encoding="utf-8") as f:
+            status = json.load(f)
+    except Exception:
+        return False
+    if status.get("date") != datetime.now().strftime("%Y-%m-%d"):
+        return False
+    if status.get("error"):
+        return False
+    return status.get("total", 0) > 0 and status.get("fail", 0) == 0
+
+
 if __name__ == '__main__':
     workflow = os.getenv("WORKFLOW_NAME", "sign-in")
     backup_mode = "--backup" in sys.argv or os.getenv("BACKUP_MODE") == "1"
     logger.info(f"===== 工作流: {workflow} {'(兜底模式)' if backup_mode else ''} =====")
+
+    # 兜底短路：早上已全部签到就无需再逐个复查（省时，且不会产生误报告警）
+    if backup_mode and already_signed_today():
+        logger.info("兜底检查: 今日已全部签到，跳过复查，不发送邮件")
+        sys.exit(0)
 
     try:
         cookie = tieba_login.login()

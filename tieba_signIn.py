@@ -86,15 +86,25 @@ def get_tbs(cookie):
 # 签到模块
 def client_sign(data, cookie):
     # 带上参数对接口发起post请求，并将response处理成json格式
-    res = requests.post(url=constant.sign_url, data=data, cookies=cookie, timeout=5).json()
+    # 网络类异常（超时/连接失败）不再向外抛出，否则会中断整个签到流程；
+    # 改为记为失败并进入重试队列（2026-10-05 修复：曾因 read timeout 导致兜底误报告警）
+    try:
+        res = requests.post(url=constant.sign_url, data=data, cookies=cookie, timeout=10).json()
+    except Exception as e:
+        logger.warning(f"{data.get('kw')}吧，请求异常（将重试）: {str(e)[:80]}")
+        return fail_flag
     # 检查签到状态
-    if res['error_code'] == 0 or 'user_info' in res:
-        logger.info(f"{data.get('kw')}吧，签到成功！")
-        return success_flag
-    elif res['error_code'] == "160002":
-        logger.info(f"{data.get('kw')}吧，已经签到过了！")
-        return signed_flag
-    else:
-        logger.info(f"{data.get('kw')}吧，签到失败！")
-        logger.info(f"失败原因：{str(res)}")
+    try:
+        if res['error_code'] == 0 or 'user_info' in res:
+            logger.info(f"{data.get('kw')}吧，签到成功！")
+            return success_flag
+        elif res['error_code'] == "160002":
+            logger.info(f"{data.get('kw')}吧，已经签到过了！")
+            return signed_flag
+        else:
+            logger.info(f"{data.get('kw')}吧，签到失败！")
+            logger.info(f"失败原因：{str(res)}")
+            return fail_flag
+    except Exception as e:
+        logger.warning(f"{data.get('kw')}吧，响应解析异常（将重试）: {str(e)[:80]}")
         return fail_flag

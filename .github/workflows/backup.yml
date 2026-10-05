@@ -46,3 +46,12 @@ jobs:
             git commit -m "chore: 更新签到状态 [skip ci]"
             git push
           )
+
+      # 签到步骤用了 continue-on-error，这里把真实结果反映到 workflow 状态上
+      - name: 结果判定
+        if: always()
+        run: |
+          if [ "${{ steps.signin.outcome }}" = "failure" ]; then
+            echo "::error::兜底签到执行失败，请查看上方日志"
+            exit 1
+          fi
