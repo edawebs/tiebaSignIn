@@ -1,9 +1,9 @@
-name: 贴吧签到 (08:00)
+name: 贴吧签到 (08:17)
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 0 * * *'  # UTC 00:00 = 北京时间 08:00
+    - cron: '17 0 * * *'   # UTC 00:17 = 北京时间 08:17
 
 jobs:
   sign-in:

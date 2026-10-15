@@ -1,9 +1,9 @@
-name: 看门狗 (12:00)
+name: 看门狗 (12:43)
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 4 * * *'  # UTC 04:00 = 北京时间 12:00
+    - cron: '43 4 * * *'   # UTC 04:43 = 北京时间 12:43
 
 jobs:
   watchdog:

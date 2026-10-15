@@ -1,9 +1,9 @@
-name: 贴吧兜底签到 (14:00)
+name: 贴吧兜底签到 (14:11)
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 6 * * *'  # UTC 06:00 = 北京时间 14:00
+    - cron: '11 6 * * *'   # UTC 06:11 = 北京时间 14:11
 
 jobs:
   backup:

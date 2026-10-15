@@ -1,0 +1,66 @@
+name: 签到巡检（防漏跑）
+
+# 第五层防护：高频巡检。
+# 前四层（主签/补签/看门狗/兜底）都是"定时触发"，一旦 GitHub schedule
+# 整批漏跑（2026-08-27、2026-10-15 均发生过）就没人兜底。
+# 本工作流每小时跑两次，调用 --backup 模式：run.py 内部的
+# already_signed_today() 会判断今日是否已全签——
+#   已签   → sys.exit(0) 静默跳过，不发邮件
+#   未签   → 立即执行签到并发送报告
+# 这样即使前四层全部漏跑，只要任意一次巡检跑成即自动补上。
+
+on:
+  schedule:
+    # 每小时第 7/37 分各一次（避开整点调度洪峰）
+    - cron: '7,37 * * *'
+  workflow_dispatch:
+
+jobs:
+  patrol:
+    runs-on: ubuntu-latest
+    env:
+      BDUSS: ${{ secrets.BDUSS }}
+      PTOKEN: ${{ secrets.PTOKEN }}
+      EMAIL_USER: ${{ secrets.EMAIL_USER }}
+      EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+      WORKFLOW_NAME: patrol
+
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: 安装依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: 巡检签到（今日已全签则自动静默跳过）
+        id: signin
+        run: python run.py --backup
+        continue-on-error: true
+
+      - name: 提交签到状态
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add cache/signin-status.json
+          git diff --staged --quiet || (
+            git commit -m "chore: 更新签到状态 [skip ci]"
+            git push
+          )
+
+      - name: 结果判定
+        if: always()
+        run: |
+          if [ "${{ steps.signin.outcome }}" = "failure" ]; then
+            echo "::error::巡检签到执行失败，请查看上方日志"
+            exit 1
+          fi

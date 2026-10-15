@@ -1,9 +1,9 @@
-name: 补签 (10:00)
+name: 补签 (10:31)
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 2 * * *'  # UTC 02:00 = 北京时间 10:00
+    - cron: '31 2 * * *'   # UTC 02:31 = 北京时间 10:31
 
 jobs:
   retry:
@@ -31,7 +31,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: 检查 08:00 签到状态
+      - name: 检查主签 08:17 状态
         id: check
         run: |
           python -c "
@@ -79,6 +79,6 @@ jobs:
             git push
           )
 
-      - name: 跳过（08:00 已成功）
+      - name: 跳过（主签已成功）
         if: env.STATUS == 'ALREADY_OK'
-        run: echo "08:00 签到已全部成功，无需补签"
+        run: echo "主力签到已全部成功，无需补签"
