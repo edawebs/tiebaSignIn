@@ -1,7 +1,7 @@
 import json
 import os
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 import tieba_login
 import tieba_signIn
@@ -10,13 +10,23 @@ from constant import success_flag, signed_flag, fail_flag
 from logger import logger
 import notify
 
+# GitHub Actions runner 时区为 UTC，统一换算为北京时间（UTC+8）后再记录与判断"今天"，
+# 否则凌晨 0-8 点运行时会误判成前一天，触发多余的补签/兜底。
+CST = timezone(timedelta(hours=8))
+
+
+def now_cst():
+    """当前北京时间。写入状态与判断"今日是否已签"必须共用此函数，保持一致。"""
+    return datetime.now(CST)
+
 
 def write_status(counts, workflow_name, error=None):
     """写入签到状态到缓存文件"""
     os.makedirs("cache", exist_ok=True)
+    now = now_cst()
     status = {
-        "date": datetime.now().strftime("%Y-%m-%d"),
-        "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "date": now.strftime("%Y-%m-%d"),
+        "time": now.strftime("%Y-%m-%d %H:%M:%S"),
         "workflow": workflow_name,
         "total": sum(counts.values()) if error is None else 0,
         "success": counts.get(success_flag, 0) if error is None else 0,
@@ -39,7 +49,7 @@ def already_signed_today():
             status = json.load(f)
     except Exception:
         return False
-    if status.get("date") != datetime.now().strftime("%Y-%m-%d"):
+    if status.get("date") != now_cst().strftime("%Y-%m-%d"):
         return False
     if status.get("error"):
         return False
