@@ -14,6 +14,8 @@ on:
     # 每小时第 7/37 分各一次（避开整点调度洪峰）
     - cron: '7,37 * * *'
   workflow_dispatch:
+  push:
+    branches: [master]
 
 jobs:
   patrol:
