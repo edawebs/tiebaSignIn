@@ -42,7 +42,26 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add cache/signin-status.json
-          git diff --staged --quiet || (
-            git commit -m "chore: 更新签到状态 [skip ci]"
-            git push
-          )
+          if git diff --staged --quiet; then
+            echo "状态无变化，跳过提交"
+            exit 0
+          fi
+          git commit -m "chore: 更新签到状态 [skip ci]"
+          # 并发场景（巡检与定时任务重叠、上游已被抢先提交）下裸 git push
+          # 会因非快进被拒。此处在远端最新提交之上重建状态提交再重试。
+          BRANCH="${GITHUB_REF_NAME:-master}"
+          for i in 1 2 3 4 5; do
+            if git push; then
+              echo "✅ 状态已提交（第 $i 次尝试）"
+              exit 0
+            fi
+            echo "推送被拒（第 $i 次），与远端对齐后重试…"
+            git fetch origin "$BRANCH" || true
+            git reset --soft FETCH_HEAD 2>/dev/null || true
+            git add cache/signin-status.json
+            git commit -m "chore: 更新签到状态 [skip ci]" 2>/dev/null || true
+            sleep 3
+          done
+          # 状态提交失败不影响本次签到结果；下次运行会重新对齐状态
+          echo "⚠️ 状态提交未成功，本次签到结果不受影响"
+          exit 0
