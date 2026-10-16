@@ -12,7 +12,7 @@ name: 签到巡检（防漏跑）
 on:
   schedule:
     # 每小时第 7/37 分各一次（避开整点调度洪峰）
-    - cron: '7,37 * * *'
+    - cron: '7,37 * * * *'
   workflow_dispatch:
 
 jobs:
