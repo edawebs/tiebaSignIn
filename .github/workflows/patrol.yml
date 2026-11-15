@@ -12,6 +12,7 @@ name: 签到巡检（防漏跑）
 on:
   schedule:
     # 每小时第 7/37 分各一次（避开整点调度洪峰）
+    # 2026-11-15 仓库已脱离 Fork 网络（Leave fork network），不再受周期清理影响
     - cron: '7,37 * * * *'
   workflow_dispatch:
 
