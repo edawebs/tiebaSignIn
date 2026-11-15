@@ -1,0 +1,8 @@
+name: 健康探测
+on:
+  workflow_dispatch:
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "actions-engine-alive $(date -u)"
