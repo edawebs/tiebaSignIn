@@ -15,6 +15,7 @@ on:
     # 2026-11-15 仓库已脱离 Fork 网络（Leave fork network），不再受周期清理影响
     - cron: '7,37 * * * *'
   workflow_dispatch:
+  repository_dispatch:
 
 jobs:
   patrol:
